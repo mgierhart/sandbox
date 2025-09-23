@@ -454,7 +454,10 @@ function onUserMessage(userText, api){
   }
   const resolved = [...singles];
   for (const [g, arr] of groups.entries()){
-    resolved.push(arr[0]); // pick first per group
+    const maxGate = arr.reduce((m, item) => Math.max(m, item.minMessages || 0), -Infinity);
+    const gated = arr.filter(item => (item.minMessages || 0) === maxGate);
+    const chosen = gated[Math.floor(Math.random() * gated.length)] || arr[0];
+    resolved.push(chosen);
   }
 
   injectResolved(resolved, api);
