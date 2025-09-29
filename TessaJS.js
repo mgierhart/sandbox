@@ -121,7 +121,15 @@ function canInject(){ return S.injections < CONF.style.perTurnInjectionCap; }
 function inject(s){ if(!canInject()) return ""; S.injections++; return s; }
 function canFire(cat){ const t=now(); return (t - S.lastCatTs[cat]) >= CONF.cooldowns[cat]; }
 function markFire(cat){ S.lastCatTs[cat]=now(); }
-function capSentences(t,mi,ma){ const p=t.split(/(?<=["”'’]?[.!?])\s+/).filter(Boolean); if(p.length<mi) return t; if(p.length<=ma) return p.join(" "); return p.slice(0,ma).join(" "); }
+function capSentences(t,mi,ma){
+  let parts = t.split(/(?<=["”'’]?[.!?])\s+/).filter(Boolean);
+  if (!parts.length) return t;
+  const hook = parts.pop();
+  while ((parts.length + 1) < mi) parts.push("We keep to one calm step and breathe together.");
+  if ((parts.length + 1) > ma) parts = parts.slice(0, Math.max(0, ma - 1));
+  parts.push(hook);
+  return parts.join(" ");
+}
 function ensureRPFormat(text){
   let out=text;
   if(!/(^| )".+?"/.test(out)) out = `"Don’t you dare stall." `+out;
