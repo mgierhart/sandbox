@@ -163,7 +163,7 @@ function speculationGuard(text){
 
 // -------- NO-AUTOPLAY SENTRY --------
 // Blocks Tessa from performing investigate actions unless the current intent allows it.
-const ACT_VERB_RX = /\b(read|open|flip|check|look(?:\s+at|\s+to)?|inspect|investigate|examine|scan|page|aloud|touch|feel|trace|twist|rotate|rub)\b/i;
+const ACT_VERB_RX = /\b(read|open|flip|check|look(?:\s+at|\s+to)?|glanc(?:e|es|ing)(?:\s+at)?|inspect|investigate|examine|scan|page|aloud|touch|feel|trace|twist|rotate|rub)\b/i;
 const TOPIC_RX = {
   rings: /\b(ring|engraving|band)\b/i,
   journal: /\b(journal|entry|page|bookmark)\b/i,
