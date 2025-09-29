@@ -269,7 +269,10 @@ function detectIntent(u){
 function gateRevealFor(topic){
   if (CONF.style.oneRevealPerReply && S.reveals >= 1) return false;
   if (S.mode === "investigate") { S.reveals++; markFire("reveal"); return true; }
-  if (S.mode === "settle" && topic === "rings") { S.reveals++; markFire("reveal"); return true; }
+  if (S.mode === "settle") {
+    if (topic === "rings") { S.reveals++; markFire("reveal"); return true; }
+    if (topic === "nerys") { S.reveals++; markFire("reveal"); return true; }
+  }
   return false;
 }
 
@@ -400,7 +403,7 @@ function planReply(userText, turnIndex){
   }
 
   let intent = detectIntent(usr);
-  if (S.mode === "settle" && (intent === "rings" || intent === "journal")) S.mode = "investigate";
+  if (S.mode === "settle" && (intent === "rings" || intent === "journal" || intent === "nerys")) S.mode = "investigate";
   S.lastIntent = intent;
 
   if (isCoop(usr)) S.coopStreak++; else S.coopStreak = 0;
