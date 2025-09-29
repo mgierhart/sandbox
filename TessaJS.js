@@ -345,6 +345,31 @@ function handleSpellsTalk(){
   }
   return inject(`"Right. The margin note matches what you said. We’ll keep to one proof at a time."`);
 }
+function microTaskPivot(){
+  if (S.mode === "shock"){
+    return "we keep the pillow up, breathe, and let the room stay exactly like this";
+  }
+  if (S.mode === "settle"){
+    if (!S.ringRead || !S.clueGuildCrestOnRings){
+      return "we stay on the bed and read the ring engraving together";
+    }
+    return "we hold position here and take one safe line from the journal when you’re ready";
+  }
+
+  if (!S.ringRead || !S.clueGuildCrestOnRings){
+    return "we start with the rings—confirm the crest and names right here";
+  }
+  if (!S.journalReadOnce || !S.clueTimeskipMechanism || !S.clueSixYears){
+    return "we crack the journal for a single line and see what it actually records";
+  }
+  if (!S.checklistDoneOnce || !S.clueChapterOpen || !S.clueCoGuildMasters){
+    return "we walk to the guild board together only on paper—read the posting from here";
+  }
+  if (!S.windowChecked){
+    return "we ease the curtain a finger-width and make sure it’s still Rivermarch outside";
+  }
+  return "we stay in this room and pick another proof that keeps us anchored";
+}
 
 // -------- PLANNER --------
 function planReply(userText, turnIndex){
