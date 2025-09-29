@@ -281,18 +281,31 @@ function handleRings(){
   } return "";
 }
 function handleJournal(){
-  if (!S.journalReadOnce && gateRevealFor("journal") && canInject()){
+  if (!S.clueHouseWarVelarynColdmere){
+    if (!canInject() || !gateRevealFor("journal")) return "";
     S.journalReadOnce = true;
-    if (!S.clueHouseWarVelarynColdmere){ S.clueHouseWarVelarynColdmere = true;
-      return inject(`*She cracks the journal a finger-width.* "Crests: ${CONF.canon.houses.tessa.crest} and ${CONF.canon.houses.user.crest}; escort writs and pass embargoes… opposite sides."` + markClue("house-war"));
-    } else if (!S.clueTimeskipMechanism){ S.clueTimeskipMechanism = true;
-      return inject(`"Margin note: '**${CONF.canon.timeskip.spells.tessa.name}** held the verdict; '**${CONF.canon.timeskip.spells.user.name}** tried to undo it.' That's my handwriting?"` + markClue("timeskip-spells"));
-    } else if (!S.clueSixYears){ S.clueSixYears = true;
-      return inject(`"Dates jump—then resume **six winters** later. We… lived a lot."` + markClue("six-years"));
-    } else if (!S.clueCoGuildMasters){ S.clueCoGuildMasters = true; S.clueBRank = true; S.clueChapterOpen = true;
-      return inject(`"Here: '**${CONF.canon.rank} achieved; assigned to **open a chapter** as co-masters—${CONF.canon.town.name}**.' That's… us."` + markClue("rank+chapter"));
-    }
-  } return "";
+    S.clueHouseWarVelarynColdmere = true;
+    return inject(`*She cracks the journal a finger-width.* "Crests: ${CONF.canon.houses.tessa.crest} and ${CONF.canon.houses.user.crest}; escort writs and pass embargoes… opposite sides."` + markClue("house-war"));
+  }
+  if (!S.clueTimeskipMechanism){
+    if (!canInject() || !gateRevealFor("journal")) return "";
+    S.journalReadOnce = true;
+    S.clueTimeskipMechanism = true;
+    return inject(`"Margin note: '**${CONF.canon.timeskip.spells.tessa.name}** held the verdict; '**${CONF.canon.timeskip.spells.user.name}** tried to undo it.' That's my handwriting?"` + markClue("timeskip-spells"));
+  }
+  if (!S.clueSixYears){
+    if (!canInject() || !gateRevealFor("journal")) return "";
+    S.journalReadOnce = true;
+    S.clueSixYears = true;
+    return inject(`"Dates jump—then resume **six winters** later. We… lived a lot."` + markClue("six-years"));
+  }
+  if (!S.clueCoGuildMasters){
+    if (!canInject() || !gateRevealFor("journal")) return "";
+    S.journalReadOnce = true;
+    S.clueCoGuildMasters = true; S.clueBRank = true; S.clueChapterOpen = true;
+    return inject(`"Here: '**${CONF.canon.rank} achieved; assigned to **open a chapter** as co-masters—${CONF.canon.town.name}**.' That's… us."` + markClue("rank+chapter"));
+  }
+  return "";
 }
 function handleBoard(){
   if (!S.checklistDoneOnce && gateRevealFor("board") && canInject()){
