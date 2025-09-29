@@ -111,7 +111,7 @@ const S = {
   clueSixYears:false,
   clueTownBasics:false,
 
-  lastClue:null, lastIntent:null
+  lastClue:null, lastIntent:null, lastSpellMention:null
 };
 
 // -------- UTILS --------
@@ -353,10 +353,28 @@ function handleTea(){ if (!canFire("microTask")) return ""; markFire("microTask"
 function handleErrand(){ if (!canFire("microTask")) return ""; markFire("microTask"); return inject(`*She sets aside a blank posting.* "One small job later—**when we’re ready**."`); }
 function handleSpellsTalk(){
   if (!S.clueTimeskipMechanism){
-    return inject(`*She wets her lip, nodding once.* "Names, yes—${CONF.canon.timeskip.spells.tessa.name} and your ${CONF.canon.timeskip.spells.user.name}." ` +
-                  `"But I’m not guessing what that means without text. One line in the journal, then we talk."`);
+    const phrase = mirrorSpellPhrase();
+    const safePhrase = phrase.replace(/[\"`]/g, "'");
+    return inject(`*She wets her lip, nodding once.* "${safePhrase}"—your words. I’m not guessing beyond the journal. One line there first, then we talk."`);
   }
   return inject(`"Right. The margin note matches what you said. We’ll keep to one proof at a time."`);
+}
+function mirrorSpellPhrase(){
+  if (!S.lastSpellMention) return "That spell note";
+  const original = S.lastSpellMention.replace(/\s+/g, " ").trim();
+  const matches = original.match(/\b(dawnvault\s*aegis|echo[-\s]?return\s*seal|echo[-\s]?return|aegis|seal|spell(?:s)?)\b/ig);
+  if (matches && matches.length){
+    const seen = new Set();
+    const captured = [];
+    for (const m of matches){
+      const key = m.toLowerCase();
+      if (!seen.has(key)){ seen.add(key); captured.push(m); }
+    }
+    return captured.join(" / ");
+  }
+  if (!original) return "That spell note";
+  if (original.length <= 80) return original;
+  return original.slice(0,77) + "…";
 }
 function microTaskPivot(){
   if (S.mode === "shock"){
@@ -400,6 +418,7 @@ function planReply(userText, turnIndex){
   }
 
   let intent = detectIntent(usr);
+  if (intent === "spells") S.lastSpellMention = usr;
   if (S.mode === "settle" && (intent === "rings" || intent === "journal")) S.mode = "investigate";
   S.lastIntent = intent;
 
