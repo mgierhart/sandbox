@@ -1,5 +1,5 @@
 /**
- * Tessa Dawnspark — Cozy Romcom (Slice-of-Life) — MUTUAL DISCOVERY — MAXI+++ (No-Autoplay + Guarded)
+ * Tessa Dawnspark — Cozy Romcom (Slice-of-Life) — MUTUAL DISCOVERY — MAXI+++ (No-Autoplay + Guarded + Stale-Clue Reset)
  * Standalone JanitorAI Advanced Script (NO Basic/UI scripts, NO Lorebary required)
  */
 
@@ -57,7 +57,7 @@ const CONF = {
   gating: { nerysKeywords: ["kid","kids","child","children","daughter","son","nerys"] }
 };
 
-// -------- NPCS (summoned only if visited) --------
+// -------- NPCS --------
 const NPCS = {
   marla: {
     key: "marla", name: "Marla", aliases: ["maria","clerk","guild clerk","front desk"],
@@ -87,13 +87,13 @@ const NPCS = {
 // -------- STATE --------
 const S = {
   turn: 0,
-  mode: "shock", // shock -> settle -> investigate
+  mode: "shock",
   lastTs: 0, injections: 0, reveals: 0,
   coopStreak: 0, objectionTurn: -1,
   lastCatTs: { quip:0, npc:0, microTask:0, comfort:0, reveal:0 },
 
   nerysUnlocked: false, clueNerysKnown: false,
-  userPlan: null, // 'journal' | 'board' | 'view' | 'npc' | 'settle' | null
+  userPlan: null,
 
   ringNoticed:false, ringRead:false,
   journalsSeen:true, journalReadOnce:false,
@@ -111,12 +111,18 @@ const S = {
   clueSixYears:false,
   clueTownBasics:false,
 
+  // Journal sequence tracker
+  journalStep: 0,
+
+  // Allowlist for this-turn reveals (extra strict guard)
+  allowThisTurn: { sixYears:false },
+
   lastClue:null, lastIntent:null
 };
 
 // -------- UTILS --------
 function now(){ return Date.now(); }
-function applyCooldown(){ const t=now(); if(t - S.lastTs < CONF.style.cooldownMs) return; S.lastTs=t; S.injections=0; S.reveals=0; }
+function applyCooldown(){ const t=now(); if(t - S.lastTs < CONF.style.cooldownMs) return; S.lastTs=t; S.injections=0; S.reveals=0; S.allowThisTurn={sixYears:false}; } // FIX: reset allowlist each turn
 function canInject(){ return S.injections < CONF.style.perTurnInjectionCap; }
 function inject(s){ if(!canInject()) return ""; S.injections++; return s; }
 function canFire(cat){ const t=now(); return (t - S.lastCatTs[cat]) >= CONF.cooldowns[cat]; }
@@ -141,36 +147,40 @@ function wbRegex(words){ return new RegExp(`\\b(${words.map(w=>w.replace(/[.*+?^
 function isCoop(u){ return /\b(let(?:'s)?|together|team up|we can|sorry|apologize|my fault|i forgive|i'm sorry|truce)\b/i.test(u); }
 function checkNerysUnlock(u){ if(S.nerysUnlocked) return; if(wbRegex(CONF.gating.nerysKeywords).test(u)) S.nerysUnlocked=true; }
 function markClue(label){ S.lastClue=label; return CONF.debug.PRINT_FIRED_CLUE ? ` [${label}]` : ""; }
+function rxEsc(s){ return s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'); }
 
-// -------- GUARDS: No-inference + speculation --------
-function escapeRx(s){ return s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'); }
-const GUARD = [
-  { flag: ()=>S.clueSixYears,        rx: /\b(six\s+winters?|6\s+years?|six\s+years?)\b/gi,          replace: ()=>'the missing years' },
-  { flag: ()=>S.clueAccordFlintford, rx: new RegExp(`\\b(${escapeRx(CONF.canon.accord)})\\b`,'gi'), replace: ()=>'that later agreement' },
-  { flag: ()=>S.clueCoGuildMasters,  rx: /\b(co-?guild\s+masters?|guild\s+masters?|assigned\s+to\s+open\s+a\s+chapter)\b/gi, replace: ()=>'some kind of guild role' },
-  { flag: ()=>S.clueTownBasics,      rx: new RegExp(`\\b(${escapeRx(CONF.canon.town.name)})\\b`,'gi'), replace: ()=>'this town' }
-];
-function guardOutput(text){
+// -------- GUARDS --------
+const RX_SIX = /\b(six\s+winters?|6\s+years?|six\s+years?)\b/gi; // FIX: centralize
+function guardOutput(text, intent){
   let out = text;
-  for (const g of GUARD){ if (!g.flag()) out = out.replace(g.rx, g.replace()); }
-  return out;
-}
-function speculationGuard(text){
+
+  // FIX: Stale-clue hard reset — if six-years is somehow true pre-sequence, revoke it
+  if (S.clueSixYears && S.journalStep < 3) S.clueSixYears = false;
+
+  // Strict six-years gate: only show if journal step 3 just fired OR the clue is legitimately unlocked
+  const allowSixNow = S.allowThisTurn.sixYears || S.clueSixYears;
+  if (!allowSixNow) out = out.replace(RX_SIX, "the missing years");
+
+  // Other specifics
+  if(!S.clueAccordFlintford) out = out.replace(new RegExp(`\\b(${rxEsc(CONF.canon.accord)})\\b`,'gi'), "that later agreement");
+  if(!S.clueCoGuildMasters)  out = out.replace(/\b(co-?guild\s+masters?|guild\s+masters?|assigned\s+to\s+open\s+a\s+chapter)\b/gi, "some kind of guild role");
+  if(!S.clueTownBasics)      out = out.replace(new RegExp(`\\b(${rxEsc(CONF.canon.town.name)})\\b`,'gi'), "this town");
+
+  // Speculation dampener outside investigate
   if (S.mode !== "investigate") {
-    text = text
-      .replace(/\b(must have|must've)\b/gi, "might")
-      .replace(/\bsomeone\s+left\s+them\s+for\s+us\b/gi, "they were left here")
-      .replace(/\bwe\s+left\s+them\s+for\s+ourselves\b/gi, "they were left here (we can verify)")
-      .replace(/\bit\s+(?:was|is)\s+(?:obvious|clear)\b/gi, "it seems");
+    out = out.replace(/\b(must have|must've)\b/gi, "might")
+             .replace(/\bsomeone\s+left\s+them\s+for\s+us\b/gi, "they were left here")
+             .replace(/\bwe\s+left\s+them\s+for\s+ourselves\b/gi, "they were left here (we can verify)")
+             .replace(/\bit\s+(?:was|is)\s+(?:obvious|clear)\b/gi, "it seems");
   }
+  // Even in investigate, avoid attributing agents until mechanism revealed
   if (!S.clueTimeskipMechanism) {
-    text = text.replace(/\b(we\s+left\s+them\s+for\s+ourselves|someone\s+left\s+them\s+for\s+us)\b/gi, "they’re here for us to read");
+    out = out.replace(/\b(we\s+left\s+them\s+for\s+ourselves|someone\s+left\s+them\s+for\s+us)\b/gi, "they’re here for us to read");
   }
-  return text;
+  return out;
 }
 
 // -------- NO-AUTOPLAY SENTRY --------
-// Blocks Tessa from performing investigate actions unless the current intent allows it.
 const ACT_VERB_RX = /\b(read|open|flip|check|look(?:\s+at|\s+to)?|glanc(?:e|es|ing)(?:\s+at)?|inspect|investigate|examine|scan|page|aloud|touch|feel|trace|twist|rotate|rub)\b/i;
 const TOPIC_RX = {
   rings: /\b(ring|engraving|band)\b/i,
@@ -178,27 +188,19 @@ const TOPIC_RX = {
   board: /\b(board|roster|posting|notice|directive|writ|stamp)\b/i
 };
 function sentenceAllows(topic, intent){
-  if (S.mode==="shock") return false; // never during shock
-  if (S.mode==="settle" && topic!=="rings") return false; // only rings allowed in settle
+  if (S.mode==="shock") return false;
+  if (S.mode==="settle" && topic!=="rings") return false;
   return intent === topic;
 }
 function sanitizeAutoplay(text, intent){
-  // split into sentences and rewrite blocked investigative actions
   const sentences = text.split(/(?<=["”'’]?[.!?])\s+/).filter(Boolean);
   const rewritten = sentences.map(s=>{
-    const hasActionVerb = ACT_VERB_RX.test(s);
-    const touches = {
-      rings: TOPIC_RX.rings.test(s),
-      journal: TOPIC_RX.journal.test(s),
-      board: TOPIC_RX.board.test(s)
-    };
-    // If sentence contains an action verb & touches a topic we didn't intend, rewrite it into a suggestion.
-    if (hasActionVerb && ((touches.rings && !sentenceAllows("rings", intent)) ||
-                          (touches.journal && !sentenceAllows("journal", intent)) ||
-                          (touches.board && !sentenceAllows("board", intent)))){
-      // soften to a suggestion without action
+    const hasVerb = ACT_VERB_RX.test(s);
+    const touches = { rings: TOPIC_RX.rings.test(s), journal: TOPIC_RX.journal.test(s), board: TOPIC_RX.board.test(s) };
+    if (hasVerb && ((touches.rings && !sentenceAllows("rings", intent)) ||
+                    (touches.journal && !sentenceAllows("journal", intent)) ||
+                    (touches.board && !sentenceAllows("board", intent)))){
       return s
-        .replace(/\b(she|tessa)\s+\b/ig, "She ")
         .replace(/\b(grabs?|snatches?|opens?|flips?|reads?|checks?|inspects?|investigates?|examines?|scans?|touches?|traces?|twists?|rotates?|rubs?)\b/ig, "could")
         .replace(/\b(the\s+)?(journal|ring|board|roster|page|bookmark)\b/ig, "$2—if you want");
     }
@@ -292,31 +294,27 @@ function handleRings(){
   } return "";
 }
 function handleJournal(){
-  if (!S.clueHouseWarVelarynColdmere){
-    if (!canInject() || !gateRevealFor("journal")) return "";
-    S.journalReadOnce = true;
-    S.clueHouseWarVelarynColdmere = true;
-    return inject(`*She cracks the journal a finger-width.* "Crests: ${CONF.canon.houses.tessa.crest} and ${CONF.canon.houses.user.crest}; escort writs and pass embargoes… opposite sides."` + markClue("house-war"));
+  if (!canInject()) return "";
+  if (!gateRevealFor("journal")) return "";
+
+  S.journalReadOnce = true;
+  let out = "";
+
+  if (S.journalStep === 0){
+    S.clueHouseWarVelarynColdmere = true; S.journalStep = 1;
+    out = `*She cracks the journal a finger-width.* "Crests: ${CONF.canon.houses.tessa.crest} and ${CONF.canon.houses.user.crest}; escort writs and pass embargoes… opposite sides."` + markClue("house-war");
+  } else if (S.journalStep === 1){
+    S.clueTimeskipMechanism = true; S.journalStep = 2;
+    out = `"Margin note: '**${CONF.canon.timeskip.spells.tessa.name}** held the verdict; '**${CONF.canon.timeskip.spells.user.name}** tried to undo it.' That's my handwriting?"` + markClue("timeskip-spells");
+  } else if (S.journalStep === 2){
+    S.clueSixYears = true; S.journalStep = 3; S.allowThisTurn.sixYears = true; // FIX: allow phrase ONLY this turn explicitly
+    out = `"Dates jump—then resume **six winters** later. We… lived a lot."` + markClue("six-years");
+  } else {
+    if (!S.clueCoGuildMasters){ S.clueCoGuildMasters = true; S.clueBRank = true; S.clueChapterOpen = true; }
+    S.journalStep = 4;
+    out = `"Here: '**${CONF.canon.rank} achieved; assigned to **open a chapter** as co-masters—${CONF.canon.town.name}**.' That's… us."` + markClue("rank+chapter");
   }
-  if (!S.clueTimeskipMechanism){
-    if (!canInject() || !gateRevealFor("journal")) return "";
-    S.journalReadOnce = true;
-    S.clueTimeskipMechanism = true;
-    return inject(`"Margin note: '**${CONF.canon.timeskip.spells.tessa.name}** held the verdict; '**${CONF.canon.timeskip.spells.user.name}** tried to undo it.' That's my handwriting?"` + markClue("timeskip-spells"));
-  }
-  if (!S.clueSixYears){
-    if (!canInject() || !gateRevealFor("journal")) return "";
-    S.journalReadOnce = true;
-    S.clueSixYears = true;
-    return inject(`"Dates jump—then resume **six winters** later. We… lived a lot."` + markClue("six-years"));
-  }
-  if (!S.clueCoGuildMasters){
-    if (!canInject() || !gateRevealFor("journal")) return "";
-    S.journalReadOnce = true;
-    S.clueCoGuildMasters = true; S.clueBRank = true; S.clueChapterOpen = true;
-    return inject(`"Here: '**${CONF.canon.rank} achieved; assigned to **open a chapter** as co-masters—${CONF.canon.town.name}**.' That's… us."` + markClue("rank+chapter"));
-  }
-  return "";
+  return inject(out);
 }
 function handleBoard(){
   if (!S.checklistDoneOnce && gateRevealFor("board") && canInject()){
@@ -383,7 +381,7 @@ function microTaskPivot(){
   if (!S.ringRead || !S.clueGuildCrestOnRings){
     return "we start with the rings—confirm the crest and names right here";
   }
-  if (!S.journalReadOnce || !S.clueTimeskipMechanism || !S.clueSixYears){
+  if (S.journalStep < 3){
     return "we crack the journal for a single line and see what it actually records";
   }
   if (!S.checklistDoneOnce || !S.clueChapterOpen || !S.clueCoGuildMasters){
@@ -462,10 +460,9 @@ function planReply(userText, turnIndex){
   body = capSentences(body, CONF.style.minSentences, CONF.style.maxSentences);
   body = ensureRPFormat(body);
 
-  // Final filters: first stop any autoplay, then apply guards.
+  // Final filters
   body = sanitizeAutoplay(body, intent);
-  body = guardOutput(body);
-  body = speculationGuard(body);
+  body = guardOutput(body, intent);
 
   if (CONF.debug.PRINT_FIRED_CLUE && S.lastClue) body += ` <${S.lastClue}>`;
   return body;
@@ -477,8 +474,7 @@ function onMessage(userText, turnIndex){
   catch(e){
     let fallback = `"Breathe." *She keeps the pillow between you, wings tucked.* \`One clue at a time.\` ${softHook()}`;
     fallback = sanitizeAutoplay(fallback, "neutral");
-    fallback = guardOutput(fallback);
-    return speculationGuard(fallback);
+    return guardOutput(fallback, "neutral");
   }
 }
 
